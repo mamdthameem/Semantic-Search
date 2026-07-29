@@ -1,0 +1,15 @@
+services:
+  minio:
+    image: minio/minio:latest
+    ports:
+      - "9000:9000"   # API port — your Python code talks to this
+      - "9001:9001"   # Web console — browser UI to inspect buckets/files visually
+    environment:
+      MINIO_ROOT_USER: admin
+      MINIO_ROOT_PASSWORD: admin123
+    volumes:
+      - minio_data:/data   # persists files across container restarts
+    command: server /data --console-address ":9001"
+
+volumes:
+  minio_data:

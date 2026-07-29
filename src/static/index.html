@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Stacks — Semantic PDF Search</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #20262e;
+    --paper: #ece7da;
+    --card: #fffdf9;
+    --accent: #2f5d50;
+    --accent-soft: #dce8e4;
+    --highlight: #f6c453;
+    --muted: #7a7566;
+    --border: #d8d1bf;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'Inter', sans-serif;
+    min-height: 100vh;
+  }
+
+  .wrap {
+    max-width: 780px;
+    margin: 0 auto;
+    padding: 56px 24px 100px;
+  }
+
+  header {
+    margin-bottom: 40px;
+  }
+
+  .eyebrow {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 10px;
+  }
+
+  h1 {
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: 42px;
+    margin: 0;
+    line-height: 1.05;
+  }
+
+  .subtitle {
+    color: var(--muted);
+    font-size: 15px;
+    margin-top: 10px;
+    max-width: 46ch;
+  }
+
+  /* Upload strip */
+  .upload-strip {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 18px;
+    margin-bottom: 28px;
+  }
+
+  .upload-strip label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    padding: 8px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+  .upload-strip label:hover { background: var(--accent); color: #fff; }
+  .upload-strip input[type="file"] { display: none; }
+
+  #upload-status {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12.5px;
+    color: var(--muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Search bar */
+  .search-bar {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 36px;
+  }
+
+  .search-bar input[type="text"] {
+    flex: 1;
+    font-family: 'Fraunces', serif;
+    font-size: 20px;
+    padding: 14px 4px;
+    border: none;
+    border-bottom: 2px solid var(--ink);
+    background: transparent;
+    color: var(--ink);
+    outline: none;
+  }
+  .search-bar input[type="text"]::placeholder { color: #9a9484; }
+  .search-bar input[type="text"]:focus { border-bottom-color: var(--accent); }
+
+  .search-bar button {
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    font-size: 14px;
+    background: var(--ink);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 0 22px;
+    cursor: pointer;
+  }
+  .search-bar button:hover { background: var(--accent); }
+  .search-bar button:focus-visible, .upload-strip label:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  /* Results */
+  #results-meta {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 16px;
+  }
+
+  .result-card {
+    display: flex;
+    gap: 16px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 20px 20px 0;
+    margin-bottom: 16px;
+  }
+
+  .rank-tab {
+    flex: 0 0 46px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    color: var(--accent);
+    background: var(--accent-soft);
+    border-radius: 10px 0 0 10px;
+    align-self: stretch;
+  }
+
+  .result-body { flex: 1; min-width: 0; }
+
+  .result-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11.5px;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+
+  .result-meta .filename {
+    color: var(--ink);
+    font-weight: 500;
+    font-family: 'Inter', sans-serif;
+  }
+
+  .score-badge {
+    background: var(--accent);
+    color: #fff;
+    padding: 2px 8px;
+    border-radius: 4px;
+  }
+
+  .excerpt {
+    font-size: 15px;
+    line-height: 1.6;
+    color: var(--ink);
+  }
+  .excerpt .ellipsis { color: var(--muted); }
+
+  .excerpt mark {
+    background: transparent;
+    color: var(--ink);
+    padding: 0.05em 0.15em;
+    position: relative;
+  }
+  .excerpt mark::before {
+    content: "";
+    position: absolute;
+    left: -2px; right: -2px; top: 18%; bottom: 10%;
+    background: var(--highlight);
+    transform: rotate(-0.6deg);
+    border-radius: 3px 6px 4px 7px;
+    z-index: -1;
+    mix-blend-mode: multiply;
+  }
+
+  .empty-state, .loading-state {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    color: var(--muted);
+    padding: 24px 0;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="eyebrow">Semantic PDF Search</div>
+      <h1>Stacks</h1>
+      <p class="subtitle">Upload a PDF, then search it by meaning — not just keywords. Matches point back to the exact passage in the original document.</p>
+    </header>
+
+    <div class="upload-strip">
+      <label for="file-input">Choose PDF</label>
+      <input type="file" id="file-input" accept="application/pdf" />
+      <span id="upload-status">No document indexed yet.</span>
+    </div>
+
+    <div class="search-bar">
+      <input type="text" id="query-input" placeholder="What are you looking for?" />
+      <button id="search-btn">Search</button>
+    </div>
+
+    <div id="results-meta"></div>
+    <div id="results"></div>
+  </div>
+
+<script>
+  const fileInput = document.getElementById('file-input');
+  const uploadStatus = document.getElementById('upload-status');
+  const queryInput = document.getElementById('query-input');
+  const searchBtn = document.getElementById('search-btn');
+  const resultsEl = document.getElementById('results');
+  const resultsMetaEl = document.getElementById('results-meta');
+
+  let lastUploadedPdfId = null;
+
+  fileInput.addEventListener('change', async () => {
+    const file = fileInput.files[0];
+    if (!file) return;
+
+    uploadStatus.textContent = `Indexing ${file.name}...`;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const res = await fetch('/upload', { method: 'POST', body: formData });
+      if (!res.ok) throw new Error(`Upload failed (${res.status})`);
+      const data = await res.json();
+      lastUploadedPdfId = data.pdf_id;
+      uploadStatus.textContent = `Indexed: ${data.filename} (${data.pdf_id.slice(0, 8)}…)`;
+    } catch (err) {
+      uploadStatus.textContent = `Could not index this file — ${err.message}`;
+    }
+  });
+
+  function escapeHtml(str) {
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
+  function buildExcerpt(fullText, charStart, charEnd, windowSize = 100) {
+    const start = Math.max(0, charStart - windowSize);
+    const end = Math.min(fullText.length, charEnd + windowSize);
+
+    const before = escapeHtml(fullText.slice(start, charStart));
+    const marked = escapeHtml(fullText.slice(charStart, charEnd));
+    const after = escapeHtml(fullText.slice(charEnd, end));
+
+    const leadEllipsis = start > 0 ? '<span class="ellipsis">… </span>' : '';
+    const trailEllipsis = end < fullText.length ? '<span class="ellipsis"> …</span>' : '';
+
+    return `${leadEllipsis}${before}<mark>${marked}</mark>${after}${trailEllipsis}`;
+  }
+
+  async function runSearch() {
+    const query = queryInput.value.trim();
+    if (!query) return;
+
+    resultsEl.innerHTML = '';
+    resultsMetaEl.innerHTML = '<div class="loading-state">Searching…</div>';
+
+    try {
+      const res = await fetch(`/search?query=${encodeURIComponent(query)}&top_k=5`);
+      if (!res.ok) throw new Error(`Search failed (${res.status})`);
+      const data = await res.json();
+
+      resultsMetaEl.textContent = `${data.results.length} match(es) for "${data.query}"`;
+
+      if (data.results.length === 0) {
+        resultsEl.innerHTML = '<div class="empty-state">No matches. Try a different phrasing.</div>';
+        return;
+      }
+
+      resultsEl.innerHTML = data.results.map((r, i) => `
+        <div class="result-card">
+          <div class="rank-tab">${String(i + 1).padStart(2, '0')}</div>
+          <div class="result-body">
+            <div class="result-meta">
+              <span class="score-badge">${r.score.toFixed(3)}</span>
+              <span class="filename">${escapeHtml(r.source_filename)}</span>
+              <span>page ${r.page_number}</span>
+            </div>
+            <div class="excerpt">${buildExcerpt(r.full_page_text, r.char_start, r.char_end)}</div>
+          </div>
+        </div>
+      `).join('');
+    } catch (err) {
+      resultsMetaEl.innerHTML = '';
+      resultsEl.innerHTML = `<div class="empty-state">Something went wrong — ${err.message}</div>`;
+    }
+  }
+
+  searchBtn.addEventListener('click', runSearch);
+  queryInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') runSearch();
+  });
+</script>
+</body>
+</html>

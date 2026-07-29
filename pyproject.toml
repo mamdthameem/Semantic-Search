@@ -1,0 +1,16 @@
+[project]
+name = "semantic-search"
+version = "0.1.0"
+description = "Semantic PDF search with MinIO and Cloudflare Vectorize"
+requires-python = ">=3.11"
+dependencies = [
+    "cloudflare",
+    "fastapi",
+    "minio",
+    "pymupdf",
+    "python-dotenv",
+    "python-multipart",
+    "requests",
+    "sentence-transformers",
+    "uvicorn",
+]
