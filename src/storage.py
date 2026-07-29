@@ -3,7 +3,7 @@
 from minio import Minio
 from minio.error import S3Error
 import uuid
-import io
+import os
 
 from config import (
     MINIO_ENDPOINT,
@@ -21,38 +21,57 @@ client = Minio(
     secure=False,  # True only if using HTTPS — not needed for local dev
 )
 
-
-def ensure_bucket_exists():
-    """Creates the bucket if it doesn't already exist. Safe to call every time."""
+def ensure_bucket_exists():             
     if not client.bucket_exists(BUCKET_NAME):
         client.make_bucket(BUCKET_NAME)
-        print(f"Created bucket: {BUCKET_NAME}")
 
 
 def upload_pdf(file_path: str, source_filename: str | None = None) -> str:
-    """
-    Uploads a PDF to MinIO and returns a unique pdf_id —
-    this ID is what Vectorize metadata will reference later.
-    """
     ensure_bucket_exists()
     pdf_id = str(uuid.uuid4())
     object_name = f"{pdf_id}.pdf"
+    filename = source_filename or os.path.basename(file_path)
 
-    client.fput_object(BUCKET_NAME, object_name, file_path)
-    print(f"Uploaded {file_path} as {object_name}")
+    # Custom metadata — this is how MinIO remembers the ORIGINAL filename,
+    # since the object itself is stored under a UUID, not the real name.
+    client.fput_object(
+        BUCKET_NAME, object_name, file_path,
+        metadata={"source-filename": filename},
+    )
     return pdf_id
 
 
 def download_pdf(pdf_id: str, destination_path: str):
-    """Downloads a PDF back from MinIO using its pdf_id."""
     object_name = f"{pdf_id}.pdf"
     client.fget_object(BUCKET_NAME, object_name, destination_path)
-    print(f"Downloaded {object_name} to {destination_path}")
 
 
-if __name__ == "__main__":
-    test_path = input("Enter path to a PDF to upload: ").strip()
-    pdf_id = upload_pdf(test_path)
-    print(f"\npdf_id: {pdf_id}")
+def _get_meta(metadata: dict, key: str, default=None):
+    """MinIO returns custom metadata keys with varying casing/prefixes
+    depending on the SDK version — this looks them up safely either way."""
+    target = key.lower()
+    for k, v in metadata.items():
+        if k.lower().endswith(target):
+            return v
+    return default
 
-    download_pdf(pdf_id, "downloaded_test.pdf")
+
+def list_documents() -> list[dict]:
+    """
+    Lists every PDF currently stored in MinIO — the durable record of
+    'previously uploaded documents' your UI needs. MinIO is the single
+    source of truth here, not Vectorize (which only knows chunks).
+    """
+    ensure_bucket_exists()
+    documents = []
+    for obj in client.list_objects(BUCKET_NAME):
+        stat = client.stat_object(BUCKET_NAME, obj.object_name)
+        pdf_id = obj.object_name.removesuffix(".pdf")
+        filename = _get_meta(stat.metadata or {}, "source-filename", default=obj.object_name)
+        documents.append({
+            "pdf_id": pdf_id,
+            "filename": filename,
+            "uploaded_at": stat.last_modified.isoformat() if stat.last_modified else None,
+        })
+    documents.sort(key=lambda d: d["uploaded_at"] or "", reverse=True)
+    return documents

@@ -8,7 +8,8 @@ from vectorize_insert import insert_chunks
 
 
 def ingest_pdf(pdf_path: str, source_filename: str | None = None) -> str: #Full pipeline: upload PDF to MinIO, then chunk + embed + insert into Vectorize — all tagged with the SAME pdf_id.
-    pdf_id = upload_pdf(pdf_path)
+    filename = source_filename or os.path.basename(pdf_path)
+    pdf_id = upload_pdf(pdf_path, source_filename=filename)
     chunks = chunk_pdf(pdf_path)
     chunks = embed_chunks(chunks)
     insert_chunks(chunks, pdf_id, source_filename or os.path.basename(pdf_path))

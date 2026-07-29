@@ -2,7 +2,6 @@
 
 import re
 from extraction import extract_pdf
-from extraction import build_page_text_from_blocks
 
 MAX_CHUNK_WORDS = 100
 OVERLAP_WORDS = int(MAX_CHUNK_WORDS * 0.10)  # ~10 words
@@ -12,8 +11,24 @@ def split_into_sentences(text: str) -> list[str]: #Naive punctuation-based sente
     sentences = re.split(r'(?<=[.!?])\s+', text.strip())
     return [s for s in sentences if s]
 
+def build_page_text(blocks: list[dict]) -> list[dict]: #for group_blocks_into_chunks function 
+    """
+    Reconstructs a page's full text by joining its blocks with "\n\n",
+    and records each block's exact [start, end) offset within that
+    reconstructed text. Returns a LIST OF DICTS — not a string.
+    """
+    block_spans = []
+    cursor = 0
+    for block in blocks:
+        text = block["text"]
+        start = cursor
+        end = start + len(text)
+        block_spans.append({**block, "page_char_start": start, "page_char_end": end})
+        cursor = end + 2  # +2 for "\n\n" separator
+    return block_spans
+
 def group_blocks_into_chunks(blocks: list[dict], page_number: int) -> list[dict]: #Groups one page's blocks into word-capped chunks with sentence fallback and overlap.
-    block_spans = build_page_text_from_blocks(blocks)
+    block_spans = build_page_text(blocks)
 
     chunks = []
     chunk_index = 0

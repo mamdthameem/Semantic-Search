@@ -223,6 +223,39 @@
     padding: 24px 0;
   }
 
+  .library {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 28px;
+}
+
+.doc-chip {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--card);
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.doc-chip.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.doc-chip:hover:not(.active) {
+  border-color: var(--accent);
+  color: var(--ink);
+}
+
   @media (prefers-reduced-motion: reduce) {
     * { transition: none !important; }
   }
@@ -242,6 +275,8 @@
       <span id="upload-status">No document indexed yet.</span>
     </div>
 
+    <div id="library" class="library"></div>
+
     <div class="search-bar">
       <input type="text" id="query-input" placeholder="What are you looking for?" />
       <button id="search-btn">Search</button>
@@ -251,99 +286,128 @@
     <div id="results"></div>
   </div>
 
-<script>
-  const fileInput = document.getElementById('file-input');
-  const uploadStatus = document.getElementById('upload-status');
-  const queryInput = document.getElementById('query-input');
-  const searchBtn = document.getElementById('search-btn');
-  const resultsEl = document.getElementById('results');
-  const resultsMetaEl = document.getElementById('results-meta');
-
-  let lastUploadedPdfId = null;
-
-  fileInput.addEventListener('change', async () => {
-    const file = fileInput.files[0];
-    if (!file) return;
-
-    uploadStatus.textContent = `Indexing ${file.name}...`;
-
-    const formData = new FormData();
-    formData.append('file', file);
-
-    try {
-      const res = await fetch('/upload', { method: 'POST', body: formData });
-      if (!res.ok) throw new Error(`Upload failed (${res.status})`);
-      const data = await res.json();
-      lastUploadedPdfId = data.pdf_id;
-      uploadStatus.textContent = `Indexed: ${data.filename} (${data.pdf_id.slice(0, 8)}…)`;
-    } catch (err) {
-      uploadStatus.textContent = `Could not index this file — ${err.message}`;
-    }
-  });
-
-  function escapeHtml(str) {
-    return str
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
-  }
-
-  function buildExcerpt(fullText, charStart, charEnd, windowSize = 100) {
-    const start = Math.max(0, charStart - windowSize);
-    const end = Math.min(fullText.length, charEnd + windowSize);
-
-    const before = escapeHtml(fullText.slice(start, charStart));
-    const marked = escapeHtml(fullText.slice(charStart, charEnd));
-    const after = escapeHtml(fullText.slice(charEnd, end));
-
-    const leadEllipsis = start > 0 ? '<span class="ellipsis">… </span>' : '';
-    const trailEllipsis = end < fullText.length ? '<span class="ellipsis"> …</span>' : '';
-
-    return `${leadEllipsis}${before}<mark>${marked}</mark>${after}${trailEllipsis}`;
-  }
-
-  async function runSearch() {
-    const query = queryInput.value.trim();
-    if (!query) return;
-
-    resultsEl.innerHTML = '';
-    resultsMetaEl.innerHTML = '<div class="loading-state">Searching…</div>';
-
-    try {
-      const res = await fetch(`/search?query=${encodeURIComponent(query)}&top_k=5`);
-      if (!res.ok) throw new Error(`Search failed (${res.status})`);
-      const data = await res.json();
-
-      resultsMetaEl.textContent = `${data.results.length} match(es) for "${data.query}"`;
-
-      if (data.results.length === 0) {
-        resultsEl.innerHTML = '<div class="empty-state">No matches. Try a different phrasing.</div>';
-        return;
+  <script>
+    const fileInput = document.getElementById('file-input');
+    const uploadStatus = document.getElementById('upload-status');
+    const queryInput = document.getElementById('query-input');
+    const searchBtn = document.getElementById('search-btn');
+    const resultsEl = document.getElementById('results');
+    const resultsMetaEl = document.getElementById('results-meta');
+    const libraryEl = document.getElementById('library');
+  
+    let activePdfId = null; // null = search across all documents
+  
+    fileInput.addEventListener('change', async () => {
+      const file = fileInput.files[0];
+      if (!file) return;
+  
+      uploadStatus.textContent = `Indexing ${file.name}...`;
+      const formData = new FormData();
+      formData.append('file', file);
+  
+      try {
+        const res = await fetch('/upload', { method: 'POST', body: formData });
+        if (!res.ok) throw new Error(`Upload failed (${res.status})`);
+        const data = await res.json();
+        uploadStatus.textContent = `Indexed: ${data.filename} (${data.pdf_id.slice(0, 8)}…)`;
+        loadDocuments();
+      } catch (err) {
+        uploadStatus.textContent = `Could not index this file — ${err.message}`;
       }
-
-      resultsEl.innerHTML = data.results.map((r, i) => `
-        <div class="result-card">
-          <div class="rank-tab">${String(i + 1).padStart(2, '0')}</div>
-          <div class="result-body">
-            <div class="result-meta">
-              <span class="score-badge">${r.score.toFixed(3)}</span>
-              <span class="filename">${escapeHtml(r.source_filename)}</span>
-              <span>page ${r.page_number}</span>
-            </div>
-            <div class="excerpt">${buildExcerpt(r.full_page_text, r.char_start, r.char_end)}</div>
-          </div>
-        </div>
-      `).join('');
-    } catch (err) {
-      resultsMetaEl.innerHTML = '';
-      resultsEl.innerHTML = `<div class="empty-state">Something went wrong — ${err.message}</div>`;
+    });
+  
+    function escapeHtml(str) {
+      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
-  }
-
-  searchBtn.addEventListener('click', runSearch);
-  queryInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') runSearch();
-  });
-</script>
+  
+    function buildExcerpt(fullText, charStart, charEnd, windowSize = 100) {
+      const start = Math.max(0, charStart - windowSize);
+      const end = Math.min(fullText.length, charEnd + windowSize);
+      const before = escapeHtml(fullText.slice(start, charStart));
+      const marked = escapeHtml(fullText.slice(charStart, charEnd));
+      const after = escapeHtml(fullText.slice(charEnd, end));
+      const leadEllipsis = start > 0 ? '<span class="ellipsis">… </span>' : '';
+      const trailEllipsis = end < fullText.length ? '<span class="ellipsis"> …</span>' : '';
+      return `${leadEllipsis}${before}<mark>${marked}</mark>${after}${trailEllipsis}`;
+    }
+  
+    async function loadDocuments() {
+      try {
+        const res = await fetch('/documents');
+        const data = await res.json();
+  
+        if (data.documents.length === 0) {
+          libraryEl.innerHTML = '';
+          return;
+        }
+  
+        const allChip = `<div class="doc-chip ${activePdfId === null ? 'active' : ''}" data-pdf-id="">All documents</div>`;
+        const docChips = data.documents.map(doc => `
+          <div class="doc-chip ${activePdfId === doc.pdf_id ? 'active' : ''}" data-pdf-id="${doc.pdf_id}" title="${escapeHtml(doc.filename)}">
+            ${escapeHtml(doc.filename)}
+          </div>
+        `).join('');
+  
+        libraryEl.innerHTML = allChip + docChips;
+  
+        libraryEl.querySelectorAll('.doc-chip').forEach(chip => {
+          chip.addEventListener('click', () => {
+            activePdfId = chip.dataset.pdfId || null;
+            loadDocuments();
+          });
+        });
+      } catch (err) {
+        libraryEl.innerHTML = '';
+      }
+    }
+  
+    async function runSearch() {
+      const query = queryInput.value.trim();
+      if (!query) return;
+  
+      resultsEl.innerHTML = '';
+      resultsMetaEl.innerHTML = '<div class="loading-state">Searching…</div>';
+  
+      const params = new URLSearchParams({ query, top_k: 5 });
+      if (activePdfId) params.set('pdf_id', activePdfId);
+  
+      try {
+        const res = await fetch(`/search?${params}`);
+        if (!res.ok) throw new Error(`Search failed (${res.status})`);
+        const data = await res.json();
+  
+        resultsMetaEl.textContent = `${data.results.length} match(es) for "${data.query}"`;
+  
+        if (data.results.length === 0) {
+          resultsEl.innerHTML = '<div class="empty-state">No matches. Try a different phrasing.</div>';
+          return;
+        }
+  
+        resultsEl.innerHTML = data.results.map((r, i) => `
+          <div class="result-card">
+            <div class="rank-tab">${String(i + 1).padStart(2, '0')}</div>
+            <div class="result-body">
+              <div class="result-meta">
+                <span class="score-badge">${r.score.toFixed(3)}</span>
+                <span class="filename">${escapeHtml(r.source_filename)}</span>
+                <span>page ${r.page_number}</span>
+              </div>
+              <div class="excerpt">${buildExcerpt(r.full_page_text, r.char_start, r.char_end)}</div>
+            </div>
+          </div>
+        `).join('');
+      } catch (err) {
+        resultsMetaEl.innerHTML = '';
+        resultsEl.innerHTML = `<div class="empty-state">Something went wrong — ${err.message}</div>`;
+      }
+    }
+  
+    searchBtn.addEventListener('click', runSearch);
+    queryInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') runSearch();
+    });
+  
+    loadDocuments();
+  </script>
 </body>
 </html>

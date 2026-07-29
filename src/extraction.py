@@ -26,10 +26,10 @@ def extract_pdf(pdf_path: str) -> list[dict]: #extracts text blocks from a digit
     doc.close()
     return extracted_blocks
 
-def build_page_text_from_blocks(blocks: list[dict]) -> str: #rebuilds the page text from the blocks
+def build_page_text_from_blocks(blocks: list[dict]) -> str: #rebuilds the page text from the blocks (Only for retieval.py)
     """
     The SINGLE source of truth for how page text is reconstructed from blocks.
-    Both chunking.py and retrieval.py must use this exact function —
+    retrieval.py must use this exact function —
     never reimplement this joining logic separately.
     """
     texts = [b["text"].strip() for b in blocks if b["text"].strip()]

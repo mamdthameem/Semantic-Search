@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from ingest import ingest_pdf
 from vectorize_query import search
 from retrieval import get_highlighted_chunk
+from storage import list_documents
 
 app = FastAPI(title="Semantic PDF Search")
 
@@ -28,6 +29,10 @@ async def upload_endpoint(file: UploadFile = File(...)):
         os.remove(tmp_path)
 
     return {"pdf_id": pdf_id, "filename": file.filename}
+
+@app.get("/documents")
+def list_documents_endpoint():
+    return {"documents": list_documents()}
 
 
 @app.get("/search")
