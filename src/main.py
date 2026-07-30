@@ -11,7 +11,8 @@ from fastapi.staticfiles import StaticFiles
 from ingest import ingest_pdf
 from vectorize_query import search
 from retrieval import get_highlighted_chunk
-from storage import list_documents
+from storage import list_documents, download_pdf, delete_document
+from vectorize_delete import delete_pdf_vectors
 
 app = FastAPI(title="Semantic PDF Search")
 
@@ -33,6 +34,35 @@ async def upload_endpoint(file: UploadFile = File(...)):
 @app.get("/documents")
 def list_documents_endpoint():
     return {"documents": list_documents()}
+
+
+@app.delete("/documents/{pdf_id}")
+def delete_document_endpoint(pdf_id: str):
+    # 1. Download the PDF from MinIO to a temporary file
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+        tmp_path = tmp.name
+
+    try:
+        download_pdf(pdf_id, tmp_path)
+    except Exception as e:
+        os.remove(tmp_path)
+        return {"error": f"Document not found or error downloading: {e}"}
+
+    # 2. Delete vectors from Vectorize (needs the PDF to calculate chunk IDs)
+    try:
+        delete_pdf_vectors(tmp_path, pdf_id)
+    except Exception as e:
+        print(f"Warning: Failed to delete vectors (maybe already deleted?): {e}")
+    finally:
+        os.remove(tmp_path)
+
+    # 3. Delete from MinIO
+    try:
+        delete_document(pdf_id)
+    except Exception as e:
+        return {"error": f"Failed to delete from MinIO: {e}"}
+        
+    return {"status": "success", "pdf_id": pdf_id}
 
 
 @app.get("/search")

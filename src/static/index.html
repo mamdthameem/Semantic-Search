@@ -28,10 +28,32 @@
     min-height: 100vh;
   }
 
+  .app-layout {
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    min-height: 100vh;
+  }
+  .sidebar {
+    background: var(--card);
+    border-right: 1px solid var(--border);
+    padding: 32px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .sidebar-header {
+    font-family: 'Fraunces', serif;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--ink);
+    padding-left: 8px;
+    margin-bottom: 8px;
+  }
   .wrap {
     max-width: 780px;
     margin: 0 auto;
     padding: 56px 24px 100px;
+    width: 100%;
   }
 
   header {
@@ -224,37 +246,59 @@
   }
 
   .library {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 28px;
-}
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
 
-.doc-chip {
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 12px;
-  padding: 6px 12px;
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  background: var(--card);
-  color: var(--muted);
-  cursor: pointer;
-  white-space: nowrap;
-  max-width: 220px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
+  .doc-chip {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    padding: 10px 12px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: background 0.15s, color 0.15s;
+  }
 
-.doc-chip.active {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
-}
+  .doc-chip.active {
+    background: var(--accent-soft);
+    color: var(--ink);
+    border-color: var(--border);
+  }
 
-.doc-chip:hover:not(.active) {
-  border-color: var(--accent);
-  color: var(--ink);
-}
+  .doc-chip:hover:not(.active) {
+    background: rgba(47, 93, 80, 0.05);
+    color: var(--ink);
+  }
+
+  .doc-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .delete-btn {
+    background: transparent;
+    border: none;
+    color: #a33;
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+    padding: 2px 6px;
+    border-radius: 4px;
+    opacity: 0.5;
+  }
+
+  .delete-btn:hover {
+    background: #fee;
+    opacity: 1;
+  }
 
   @media (prefers-reduced-motion: reduce) {
     * { transition: none !important; }
@@ -262,28 +306,35 @@
 </style>
 </head>
 <body>
-  <div class="wrap">
-    <header>
-      <div class="eyebrow">Semantic PDF Search</div>
-      <h1>Stacks</h1>
-      <p class="subtitle">Upload a PDF, then search it by meaning — not just keywords. Matches point back to the exact passage in the original document.</p>
-    </header>
+  <div class="app-layout">
+    <aside class="sidebar">
+      <div class="sidebar-header">Library</div>
+      <div id="library" class="library"></div>
+    </aside>
+    
+    <main class="main-content">
+      <div class="wrap">
+        <header>
+          <div class="eyebrow">Semantic PDF Search</div>
+          <h1>Stacks</h1>
+          <p class="subtitle">Upload a PDF, then search it by meaning — not just keywords. Matches point back to the exact passage in the original document.</p>
+        </header>
 
-    <div class="upload-strip">
-      <label for="file-input">Choose PDF</label>
-      <input type="file" id="file-input" accept="application/pdf" />
-      <span id="upload-status">No document indexed yet.</span>
-    </div>
+        <div class="upload-strip">
+          <label for="file-input">Choose PDF</label>
+          <input type="file" id="file-input" accept="application/pdf" />
+          <span id="upload-status">No document indexed yet.</span>
+        </div>
 
-    <div id="library" class="library"></div>
+        <div class="search-bar">
+          <input type="text" id="query-input" placeholder="What are you looking for?" />
+          <button id="search-btn">Search</button>
+        </div>
 
-    <div class="search-bar">
-      <input type="text" id="query-input" placeholder="What are you looking for?" />
-      <button id="search-btn">Search</button>
-    </div>
-
-    <div id="results-meta"></div>
-    <div id="results"></div>
+        <div id="results-meta"></div>
+        <div id="results"></div>
+      </div>
+    </main>
   </div>
 
   <script>
@@ -341,10 +392,13 @@
           return;
         }
   
-        const allChip = `<div class="doc-chip ${activePdfId === null ? 'active' : ''}" data-pdf-id="">All documents</div>`;
+        const allChip = `<div class="doc-chip ${activePdfId === null ? 'active' : ''}" data-pdf-id="">
+          <span class="doc-name">All documents</span>
+        </div>`;
         const docChips = data.documents.map(doc => `
           <div class="doc-chip ${activePdfId === doc.pdf_id ? 'active' : ''}" data-pdf-id="${doc.pdf_id}" title="${escapeHtml(doc.filename)}">
-            ${escapeHtml(doc.filename)}
+            <span class="doc-name">${escapeHtml(doc.filename)}</span>
+            <button class="delete-btn" onclick="deleteDocument('${doc.pdf_id}', event)" title="Delete Document">×</button>
           </div>
         `).join('');
   
@@ -358,6 +412,26 @@
         });
       } catch (err) {
         libraryEl.innerHTML = '';
+      }
+    }
+
+    async function deleteDocument(pdfId, event) {
+      event.stopPropagation();
+      if (!confirm("Are you sure you want to delete this document?")) return;
+      
+      try {
+        const res = await fetch(`/documents/${pdfId}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error("Delete failed");
+        
+        if (activePdfId === pdfId) activePdfId = null;
+        loadDocuments();
+        
+        // Refresh search if they are currently viewing results
+        if (resultsEl.innerHTML !== '') {
+          runSearch();
+        }
+      } catch (err) {
+        alert("Error deleting document: " + err.message);
       }
     }
   

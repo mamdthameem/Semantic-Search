@@ -46,6 +46,11 @@ def download_pdf(pdf_id: str, destination_path: str):
     client.fget_object(BUCKET_NAME, object_name, destination_path)
 
 
+def delete_document(pdf_id: str):
+    object_name = f"{pdf_id}.pdf"
+    client.remove_object(BUCKET_NAME, object_name)
+
+
 def _get_meta(metadata: dict, key: str, default=None):
     """MinIO returns custom metadata keys with varying casing/prefixes
     depending on the SDK version — this looks them up safely either way."""

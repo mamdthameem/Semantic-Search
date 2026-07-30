@@ -58,6 +58,6 @@ def verify_index():
 
 
 if __name__ == "__main__":
-    #create_index()
-    #create_metadata_indexes()
+    create_index()
+    create_metadata_indexes()
     verify_index()

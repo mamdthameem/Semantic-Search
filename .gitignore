@@ -3,3 +3,4 @@
 src/__pycache__/
 src/data/
 *.pdf
+src/semantic_search.egg-info/
