@@ -11,5 +11,11 @@ services:
       - minio_data:/data   # persists files across container restarts
     command: server /data --console-address ":9001"
 
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"   # AMQP protocol port
+      - "15672:15672" # Management UI
+
 volumes:
   minio_data:

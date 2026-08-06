@@ -26,7 +26,7 @@ I have used the classsical pipeline for Semantic search
 - Vectorize: I have used cloudfare as the vector db which is a cloud and offers 2,00,000 vector indexes in free tier and we can also view the Vectors and indexes in cloudfare dashboard in Vectorize under AI. It stores all the vectors from the embeddings
 
 
-At first for running the application inside venv
+At first for running the application inside (.venv/Scripts/Activate)
 
     1.For starting MinIO - start the app Docker Desktop, run the command docker compose up -d, check in UI on port 8000
     2. For vectorize run src/vectorize_setup.py only for first time
