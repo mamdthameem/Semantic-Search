@@ -315,15 +315,15 @@
     <main class="main-content">
       <div class="wrap">
         <header>
-          <div class="eyebrow">Semantic PDF Search</div>
+          <div class="eyebrow">Semantic Search</div>
           <h1>Stacks</h1>
-          <p class="subtitle">Upload a PDF, then search it by meaning — not just keywords. Matches point back to the exact passage in the original document.</p>
+          <p class="subtitle">Search Engine through Meaning</p>
         </header>
 
         <div class="upload-strip">
           <label for="file-input">Choose PDF</label>
           <input type="file" id="file-input" accept="application/pdf" />
-          <span id="upload-status">No document indexed yet.</span>
+          <span id="upload-status">Upload Documents</span>
         </div>
 
         <div class="search-bar">
@@ -395,12 +395,21 @@
         const allChip = `<div class="doc-chip ${activePdfId === null ? 'active' : ''}" data-pdf-id="">
           <span class="doc-name">All documents</span>
         </div>`;
-        const docChips = data.documents.map(doc => `
+        const docChips = data.documents.map(doc => {
+          let statusBadge = '';
+          if (doc.status === 'PROCESSING') statusBadge = '<span style="color:var(--highlight);font-size:10px;white-space:nowrap;flex-shrink:0;">[PROCESSING]</span>';
+          if (doc.status === 'FAILED') statusBadge = '<span style="color:#a33;font-size:10px;white-space:nowrap;flex-shrink:0;">[FAILED]</span>';
+          if (doc.status === 'UPLOADED') statusBadge = '<span style="color:var(--muted);font-size:10px;white-space:nowrap;flex-shrink:0;">[QUEUED]</span>';
+          if (doc.status === 'INDEXED') statusBadge = '<span style="color:var(--accent);font-size:10px;white-space:nowrap;flex-shrink:0;">[INDEXED]</span>';
+          return `
           <div class="doc-chip ${activePdfId === doc.pdf_id ? 'active' : ''}" data-pdf-id="${doc.pdf_id}" title="${escapeHtml(doc.filename)}">
-            <span class="doc-name">${escapeHtml(doc.filename)}</span>
-            <button class="delete-btn" onclick="deleteDocument('${doc.pdf_id}', event)" title="Delete Document">×</button>
+            <div style="display:flex; align-items:center; gap:8px; overflow:hidden; min-width:0; flex:1;">
+              <span class="doc-name" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(doc.filename)}</span>
+              ${statusBadge}
+            </div>
+            <button class="delete-btn" onclick="deleteDocument('${doc.pdf_id}', event)" title="Delete Document" style="flex-shrink:0; margin-left:4px;">×</button>
           </div>
-        `).join('');
+        `}).join('');
   
         libraryEl.innerHTML = allChip + docChips;
   

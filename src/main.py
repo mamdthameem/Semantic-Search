@@ -8,32 +8,59 @@ import uvicorn
 from fastapi import FastAPI, UploadFile, File
 from fastapi.staticfiles import StaticFiles
 
-from ingest import ingest_pdf
+import pika
+import json
 from vectorize_query import search
 from retrieval import get_highlighted_chunk
-from storage import list_documents, download_pdf, delete_document
+from storage import list_documents, download_pdf, delete_document, upload_pdf
 from vectorize_delete import delete_pdf_vectors
+from database import create_task, list_tasks, delete_task
 
 app = FastAPI(title="Semantic PDF Search")
 
 
 @app.post("/upload")
 async def upload_endpoint(file: UploadFile = File(...)):
-    #Receives a PDF from the browser, saves it to a temp path (ingest_pdf and MinIO both expect a real file path, not raw upload bytes), runs the full ingestion pipeline, then cleans up the temp file.
+    # Receives a PDF from the browser, saves it to MinIO, creates a status row, and enqueues the task.
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
         shutil.copyfileobj(file.file, tmp)
         tmp_path = tmp.name
 
     try:
-        pdf_id = ingest_pdf(tmp_path, source_filename=file.filename)
+        # 1. Upload to MinIO
+        pdf_id = upload_pdf(tmp_path, source_filename=file.filename)
+        
+        # 2. Track in SQLite
+        create_task(pdf_id, file.filename)
+        
+        # 3. Publish to RabbitMQ
+        connection = pika.BlockingConnection(pika.ConnectionParameters(host='localhost'))
+        channel = connection.channel()
+        
+        args = {
+            'x-dead-letter-exchange': '',
+            'x-dead-letter-routing-key': 'pdf_tasks_dlq'
+        }
+        channel.queue_declare(queue='pdf_tasks', durable=True, arguments=args)
+        
+        message = json.dumps({"pdf_id": pdf_id})
+        channel.basic_publish(
+            exchange='',
+            routing_key='pdf_tasks',
+            body=message,
+            properties=pika.BasicProperties(
+                delivery_mode=pika.spec.PERSISTENT_DELIVERY_MODE
+            )
+        )
+        connection.close()
     finally:
         os.remove(tmp_path)
 
-    return {"pdf_id": pdf_id, "filename": file.filename}
+    return {"pdf_id": pdf_id, "filename": file.filename, "status": "UPLOADED"}
 
 @app.get("/documents")
 def list_documents_endpoint():
-    return {"documents": list_documents()}
+    return {"documents": list_tasks()}
 
 
 @app.delete("/documents/{pdf_id}")
@@ -62,11 +89,17 @@ def delete_document_endpoint(pdf_id: str):
     except Exception as e:
         return {"error": f"Failed to delete from MinIO: {e}"}
         
+    # 4. Delete from SQLite
+    try:
+        delete_task(pdf_id)
+    except Exception as e:
+        print(f"Warning: Failed to delete task from DB: {e}")
+        
     return {"status": "success", "pdf_id": pdf_id}
 
 
 @app.get("/search")
-def search_endpoint(query: str, top_k: int = 5, pdf_id: str | None = None):
+def search_endpoint(query: str, top_k: int = 3, pdf_id: str | None = None):
     #Runs the query through Vectorize, then for each match, fetches the real text back from MinIO via retrieval.py — this is the "pointer index → real content" mechanism you already understand.
     raw_results = search(query, top_k=top_k, pdf_id=pdf_id)
     matches = raw_results.get("result", {}).get("matches", [])
