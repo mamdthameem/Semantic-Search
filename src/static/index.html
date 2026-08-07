@@ -371,17 +371,6 @@
       return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
   
-    function buildExcerpt(fullText, charStart, charEnd, windowSize = 100) {
-      const start = Math.max(0, charStart - windowSize);
-      const end = Math.min(fullText.length, charEnd + windowSize);
-      const before = escapeHtml(fullText.slice(start, charStart));
-      const marked = escapeHtml(fullText.slice(charStart, charEnd));
-      const after = escapeHtml(fullText.slice(charEnd, end));
-      const leadEllipsis = start > 0 ? '<span class="ellipsis">… </span>' : '';
-      const trailEllipsis = end < fullText.length ? '<span class="ellipsis"> …</span>' : '';
-      return `${leadEllipsis}${before}<mark>${marked}</mark>${after}${trailEllipsis}`;
-    }
-  
     async function loadDocuments() {
       try {
         const res = await fetch('/documents');
@@ -475,7 +464,7 @@
                 <span class="filename">${escapeHtml(r.source_filename)}</span>
                 <span>page ${r.page_number}</span>
               </div>
-              <div class="excerpt">${buildExcerpt(r.full_page_text, r.char_start, r.char_end)}</div>
+              <div class="excerpt">${escapeHtml(r.highlighted_text)}</div>
             </div>
           </div>
         `).join('');

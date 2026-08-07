@@ -11,10 +11,9 @@ from fastapi.staticfiles import StaticFiles
 import pika
 import json
 from vectorize_query import search
-from retrieval import get_highlighted_chunk
-from storage import list_documents, download_pdf, delete_document, upload_pdf
+from storage import list_documents, delete_document, upload_pdf
 from vectorize_delete import delete_pdf_vectors
-from database import create_task, list_tasks, delete_task
+from database import create_task, list_tasks, delete_task, delete_chunks
 
 app = FastAPI(title="Semantic PDF Search")
 
@@ -65,54 +64,40 @@ def list_documents_endpoint():
 
 @app.delete("/documents/{pdf_id}")
 def delete_document_endpoint(pdf_id: str):
-    # 1. Download the PDF from MinIO to a temporary file
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-        tmp_path = tmp.name
-
+    # 1. Delete vectors from Vectorize. IDs are rebuilt from the chunks table
+    #    in SQLite, so we no longer need to download/re-chunk the PDF here.
     try:
-        download_pdf(pdf_id, tmp_path)
-    except Exception as e:
-        os.remove(tmp_path)
-        return {"error": f"Document not found or error downloading: {e}"}
-
-    # 2. Delete vectors from Vectorize (needs the PDF to calculate chunk IDs)
-    try:
-        delete_pdf_vectors(tmp_path, pdf_id)
+        delete_pdf_vectors(pdf_id)
     except Exception as e:
         print(f"Warning: Failed to delete vectors (maybe already deleted?): {e}")
-    finally:
-        os.remove(tmp_path)
 
-    # 3. Delete from MinIO
+    # 2. Delete from MinIO
     try:
         delete_document(pdf_id)
     except Exception as e:
         return {"error": f"Failed to delete from MinIO: {e}"}
-        
-    # 4. Delete from SQLite
+
+    # 3. Delete from SQLite (task row + the chunk tracking rows)
     try:
         delete_task(pdf_id)
+        delete_chunks(pdf_id)
     except Exception as e:
         print(f"Warning: Failed to delete task from DB: {e}")
-        
+
     return {"status": "success", "pdf_id": pdf_id}
 
 
 @app.get("/search")
 def search_endpoint(query: str, top_k: int = 3, pdf_id: str | None = None):
-    #Runs the query through Vectorize, then for each match, fetches the real text back from MinIO via retrieval.py — this is the "pointer index → real content" mechanism you already understand.
+    # Runs the query through Vectorize and returns each match's text straight
+    # from the vector metadata — no MinIO round trip. char_start/char_end are
+    # still returned for the future "highlight inside the PDF" feature.
     raw_results = search(query, top_k=top_k, pdf_id=pdf_id)
     matches = raw_results.get("result", {}).get("matches", [])
 
     enriched = []
     for match in matches:
         meta = match["metadata"]
-        highlight = get_highlighted_chunk(
-            pdf_id=meta["pdf_id"],
-            page_number=meta["page_number"],
-            char_start=meta["char_start"],
-            char_end=meta["char_end"],
-        )
         enriched.append({
             "score": match["score"],
             "pdf_id": meta["pdf_id"],
@@ -120,8 +105,7 @@ def search_endpoint(query: str, top_k: int = 3, pdf_id: str | None = None):
             "page_number": meta["page_number"],
             "char_start": meta["char_start"],
             "char_end": meta["char_end"],
-            "highlighted_text": highlight["highlighted_text"],
-            "full_page_text": highlight["full_page_text"],
+            "highlighted_text": meta.get("text", ""),
         })
 
     return {"query": query, "results": enriched}

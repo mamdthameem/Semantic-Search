@@ -4,6 +4,7 @@ from storage import download_pdf
 from chunking import chunk_pdf
 from embeddings import embed_chunks
 from vectorize_insert import insert_chunks
+from database import save_chunks
 
 
 def process_pdf(pdf_id: str, source_filename: str):
@@ -18,6 +19,9 @@ def process_pdf(pdf_id: str, source_filename: str):
         chunks = chunk_pdf(tmp_path)
         chunks = embed_chunks(chunks)
         insert_chunks(chunks, pdf_id, source_filename)
+        # Only record the chunk rows AFTER the insert succeeds, so the tracking
+        # table never claims chunks that didn't actually land in Vectorize.
+        save_chunks(pdf_id, chunks)
         print(f"\nProcessing complete. pdf_id: {pdf_id}")
     finally:
         if os.path.exists(tmp_path):
