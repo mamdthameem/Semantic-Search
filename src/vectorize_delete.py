@@ -1,18 +1,19 @@
 #Used to delete the pdf vectors from the vectorize.
 
 from vectorize_setup import client, ACCOUNT_ID, INDEX_NAME
-from chunking import chunk_pdf
+from database import get_chunks
 
 
-def build_vector_ids(pdf_path: str, pdf_id: str) -> list[str]:
-    """Regenerates vector IDs deterministically — no need to re-embed just to delete."""
-    chunks = chunk_pdf(pdf_path)
+def build_vector_ids(pdf_id: str) -> list[str]:
+    """Rebuilds vector IDs from the chunks table in SQLite —
+    no need to re-download or re-chunk the PDF just to delete."""
+    chunks = get_chunks(pdf_id)
     return [f"{pdf_id}_p{c['page_number']}_c{c['chunk_index']}" for c in chunks]
 
 
-def delete_pdf_vectors(pdf_path: str, pdf_id: str):
-    ids = build_vector_ids(pdf_path, pdf_id)
-    
+def delete_pdf_vectors(pdf_id: str):
+    ids = build_vector_ids(pdf_id)
+
     # Cloudflare Vectorize limits deletes to 100 IDs at a time
     batch_size = 100
     for i in range(0, len(ids), batch_size):
@@ -28,6 +29,5 @@ def delete_pdf_vectors(pdf_path: str, pdf_id: str):
 
 
 if __name__ == "__main__":
-    pdf_path = input("Enter path to the original PDF: ").strip()
     pdf_id = input("Enter pdf_id to delete: ").strip()
-    delete_pdf_vectors(pdf_path, pdf_id)
+    delete_pdf_vectors(pdf_id)

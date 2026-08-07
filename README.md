@@ -5,7 +5,7 @@ This is Phase 1 of the project "Semantic Search" which is further developed into
 At first as my design plan I would like to share the tech stack I have choosed for this project
 Pdf Object storage: MinIO
 Vector DB: Cloudfare (cloud)
-Embedding model: Semmetric Retrieval - all-MiniLM-L6-v2
+Embedding model: Symmetric Retrieval - all-MiniLM-L6-v2
 Chunking Strategy: Paragraph based chunking with Overlapping
 
 I have created a repo in github first and cloned the repo here and working on it
@@ -14,8 +14,8 @@ I will document how I create this project and things I do learn in this project 
     1. I learned how to create a .venv envroinment, how to activate/ deactivate it
     2. I created an structure for my project initially have modularity first
     3. I created - pyproject.toml file (Replacement for requirements.txt), 
-                - .gitignore(Files that gets rejected while pushing into VCS), 
-                - .env(To change config files without changing code while adapting to new enviroinments), - - src folder which contains all of my main code
+                 - .gitignore(Files that gets rejected while pushing into VCS), 
+                 - .env(To change config files without changing code while adapting to new enviroinments), - - src folder which contains all of my main code
     4. Let's begin coding
 
 I have used the classsical pipeline for Semantic search
@@ -28,8 +28,18 @@ I have used the classsical pipeline for Semantic search
 
 At first for running the application inside (.venv/Scripts/Activate)
 
-    1.For starting MinIO - start the app Docker Desktop, run the command docker compose up -d, check in UI on port 8000
+    1.For starting MinIO - start the app Docker Desktop, run the "command docker compose up -d", check in UI on port 8000
     2. For vectorize run src/vectorize_setup.py only for first time
     3. Run "pip install -e" to install dependencies from pyproject.toml file
+    4. There are 2 terminals to be run in the backend  - main.py and - worker.py
+
+The backend is split into 2 terminals which are main.py and worker.py, (RUN BOTH)
+
+- main.py is developed in FastAPI which only stores the pdf in MinIO and calls a RabitMQ (containerized in docker) endpoint, once the endpoint is triggered, the quese worker takes the pdf and the remaining process is continued completely in worker.py
+- worker.py chunks, embedds, stores in Vectorize DB, even if worker.py fails, it resumes the process of unfinished pdf since it holds the status of UPLOADED, PROCESSING, INDEXED or FAILED. 
+- The status are stored in SQLite which holds status for each pdf inside this directory itself
+
+
+RAG- Retrieval Augmented Generation
 
 
