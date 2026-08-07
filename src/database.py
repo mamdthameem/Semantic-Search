@@ -25,6 +25,18 @@ def init_db():
                 updated_at TEXT NOT NULL
             )
         ''')
+        # One row per chunk we actually inserted into Vectorize.
+        # (pdf_id, page_number, chunk_index) are exactly the three pieces
+        # that build a vector ID — so this table lets us rebuild every ID
+        # for a PDF at delete time without re-downloading/re-chunking it.
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS chunks (
+                pdf_id TEXT NOT NULL,
+                page_number INTEGER NOT NULL,
+                chunk_index INTEGER NOT NULL,
+                PRIMARY KEY (pdf_id, page_number, chunk_index)
+            )
+        ''')
         conn.commit()
     finally:
         conn.close()
@@ -99,6 +111,42 @@ def delete_task(pdf_id: str):
     conn = get_db_connection()
     try:
         conn.execute('DELETE FROM tasks WHERE pdf_id = ?', (pdf_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+def save_chunks(pdf_id: str, chunks: list[dict]):
+    # Record one row per chunk after a successful Vectorize insert.
+    # executemany runs the same INSERT for every row in the list.
+    # INSERT OR REPLACE keeps this idempotent — re-processing the same PDF
+    # just overwrites the identical rows instead of erroring on the primary key.
+    rows = [(pdf_id, c["page_number"], c["chunk_index"]) for c in chunks]
+    conn = get_db_connection()
+    try:
+        conn.executemany('''
+            INSERT OR REPLACE INTO chunks (pdf_id, page_number, chunk_index)
+            VALUES (?, ?, ?)
+        ''', rows)
+        conn.commit()
+    finally:
+        conn.close()
+
+def get_chunks(pdf_id: str) -> list[dict]:
+    # Returns [{page_number, chunk_index}, ...] for a PDF — used to rebuild vector IDs.
+    conn = get_db_connection()
+    try:
+        cursor = conn.execute(
+            'SELECT page_number, chunk_index FROM chunks WHERE pdf_id = ?',
+            (pdf_id,),
+        )
+        return [dict(row) for row in cursor.fetchall()]
+    finally:
+        conn.close()
+
+def delete_chunks(pdf_id: str):
+    conn = get_db_connection()
+    try:
+        conn.execute('DELETE FROM chunks WHERE pdf_id = ?', (pdf_id,))
         conn.commit()
     finally:
         conn.close()

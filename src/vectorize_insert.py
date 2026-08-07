@@ -18,6 +18,10 @@ def chunks_to_ndjson(chunks: list[dict], pdf_id: str, source_filename: str) -> b
             "char_start": chunk["core_char_start"],
             "char_end": chunk["core_char_end"],
             "word_count": chunk["word_count"],
+            # The full chunk text (overlap prefix included) so search can display
+            # it straight from Vectorize, no MinIO round trip. char_start/char_end
+            # above stay for the future "highlight inside the PDF" feature.
+            "text": chunk["text"],
         }
 
         line = json.dumps({
