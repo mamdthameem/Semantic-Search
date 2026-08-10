@@ -30,7 +30,7 @@
 
   .app-layout {
     display: grid;
-    grid-template-columns: 260px 1fr;
+    grid-template-columns: 260px 1fr 360px;
     min-height: 100vh;
   }
   .sidebar {
@@ -300,6 +300,89 @@
     opacity: 1;
   }
 
+  /* Right-side Q&A (RAG) panel */
+  .ask-panel {
+    background: var(--card);
+    border-left: 1px solid var(--border);
+    padding: 32px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .ask-header {
+    font-family: 'Fraunces', serif;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .ask-sub {
+    font-size: 12.5px;
+    color: var(--muted);
+    margin-top: -8px;
+  }
+  .ask-panel textarea {
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--ink);
+    background: var(--paper);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    resize: vertical;
+    min-height: 72px;
+    outline: none;
+  }
+  .ask-panel textarea:focus { border-color: var(--accent); }
+  .ask-panel button {
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    font-size: 14px;
+    background: var(--ink);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 10px 0;
+    cursor: pointer;
+  }
+  .ask-panel button:hover { background: var(--accent); }
+  .ask-panel button:disabled { opacity: 0.5; cursor: default; }
+
+  #ask-answer {
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--ink);
+    white-space: pre-wrap;
+    background: var(--paper);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+  }
+  #ask-answer:empty { display: none; }
+
+  .ask-status {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .ask-sources-title {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .ask-source {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11.5px;
+    color: var(--muted);
+    border-left: 2px solid var(--accent-soft);
+    padding-left: 10px;
+    margin-top: 6px;
+  }
+  .ask-source .src-loc { color: var(--accent); }
+
   @media (prefers-reduced-motion: reduce) {
     * { transition: none !important; }
   }
@@ -335,6 +418,16 @@
         <div id="results"></div>
       </div>
     </main>
+
+    <aside class="ask-panel">
+      <div class="ask-header">Ask</div>
+      <div class="ask-sub">Get a written answer from your documents.</div>
+      <textarea id="ask-input" placeholder="Ask a question about your PDFs…"></textarea>
+      <button id="ask-btn">Ask</button>
+      <div id="ask-status" class="ask-status"></div>
+      <div id="ask-answer"></div>
+      <div id="ask-sources"></div>
+    </aside>
   </div>
 
   <script>
@@ -478,7 +571,68 @@
     queryInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') runSearch();
     });
-  
+
+    // --- Right-side Q&A (RAG) ---
+    const askInput = document.getElementById('ask-input');
+    const askBtn = document.getElementById('ask-btn');
+    const askStatus = document.getElementById('ask-status');
+    const askAnswer = document.getElementById('ask-answer');
+    const askSources = document.getElementById('ask-sources');
+
+    async function runAsk() {
+      const question = askInput.value.trim();
+      if (!question) return;
+
+      // Reset previous output and show a working state. The LLM call can take
+      // several seconds, so disable the button to prevent double-submits.
+      askAnswer.textContent = '';
+      askSources.innerHTML = '';
+      askStatus.textContent = 'Thinking…';
+      askBtn.disabled = true;
+
+      // Reuse the same document filter as search: null = ask across all docs.
+      const params = new URLSearchParams({ question });
+      if (activePdfId) params.set('pdf_id', activePdfId);
+
+      try {
+        const res = await fetch(`/ask?${params}`);
+        if (!res.ok) throw new Error(`Ask failed (${res.status})`);
+        const data = await res.json();
+
+        askStatus.textContent = '';
+        askAnswer.textContent = data.answer || 'No answer returned.';
+
+        if (data.sources && data.sources.length > 0) {
+          // De-duplicate by filename+page so the same page isn't listed twice.
+          const seen = new Set();
+          let html = '<div class="ask-sources-title">Sources</div>';
+          data.sources.forEach(s => {
+            const key = `${s.source_filename}|${s.page_number}`;
+            if (seen.has(key)) return;
+            seen.add(key);
+            html += `<div class="ask-source">
+              <span class="src-loc">${escapeHtml(s.source_filename)} · page ${s.page_number}</span>
+            </div>`;
+          });
+          askSources.innerHTML = html;
+        }
+      } catch (err) {
+        askStatus.textContent = '';
+        askAnswer.textContent = `Something went wrong — ${err.message}`;
+      } finally {
+        askBtn.disabled = false;
+      }
+    }
+
+    askBtn.addEventListener('click', runAsk);
+    // Enter submits; Shift+Enter makes a newline (normal textarea behaviour).
+    askInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        runAsk();
+      }
+    });
+
     loadDocuments();
   </script>
 </body>
