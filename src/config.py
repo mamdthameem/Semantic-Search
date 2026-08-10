@@ -19,3 +19,6 @@ MINIO_BUCKET_NAME = os.getenv("MINIO_BUCKET_NAME")
 CLOUDFLARE_ACCOUNT_ID = os.getenv("CLOUDFLARE_ACCOUNT_ID")
 CLOUDFLARE_API_TOKEN = os.getenv("CLOUDFLARE_API_TOKEN")
 VECTORIZE_INDEX_NAME = os.getenv("VECTORIZE_INDEX_NAME")
+
+# --- Ollama (local LLM used for RAG question-answering) ---
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL")
