@@ -14,6 +14,7 @@ from vectorize_query import search
 from storage import list_documents, delete_document, upload_pdf
 from vectorize_delete import delete_pdf_vectors
 from database import create_task, list_tasks, delete_task, delete_chunks
+from rag import answer_question
 
 app = FastAPI(title="Semantic PDF Search")
 
@@ -109,6 +110,19 @@ def search_endpoint(query: str, top_k: int = 3, pdf_id: str | None = None):
         })
 
     return {"query": query, "results": enriched}
+
+
+@app.get("/ask")
+def ask_endpoint(question: str, pdf_id: str | None = None):
+    # RAG endpoint: hands the question to the local LLM, which calls the
+    # search_documents tool to retrieve chunks and writes a grounded answer.
+    # pdf_id (the library selection) scopes the search, same as /search.
+    result = answer_question(question, pdf_id=pdf_id)
+    return {
+        "question": question,
+        "answer": result["answer"],
+        "sources": result["sources"],
+    }
 
 
 # Serve the frontend — path built from this file's own location, so it
